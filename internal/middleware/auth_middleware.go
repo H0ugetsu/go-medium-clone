@@ -26,7 +26,7 @@ func AuthMiddleware(authService service.AuthService) echo.MiddlewareFunc {
 					"errors": map[string][]string{"token": {"is missing"}},
 				})
 			}
-			tokenString = tokenString[7:]
+			tokenString = tokenString[6:]
 
 			userID, err := authService.VerifyToken(tokenString)
 			if err != nil {
@@ -47,10 +47,10 @@ func OptionalAuthMiddleware(authService service.AuthService) echo.MiddlewareFunc
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			tokenString := c.Request().Header.Get("Authorization")
-			if !strings.HasPrefix(strings.ToLower(tokenString), "bearer ") {
+			if !strings.HasPrefix(strings.ToLower(tokenString), "token ") {
 				return next(c)
 			}
-			tokenString = tokenString[7:]
+			tokenString = tokenString[6:]
 
 			userID, err := authService.VerifyToken(tokenString)
 			if err != nil {
