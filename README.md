@@ -6,7 +6,7 @@
 
 - 言語
   - Golang(1.25)
-- WEbフレームワーク
+- Webフレームワーク
   - Echo(v5)
 - データベース
   - PostgreSQL 16
@@ -20,6 +20,43 @@
   - bcrypt
 - マイグレーション
   - golang-migrate
+
+## セットアップ
+
+### 必要なもの
+
+- Docker / Docker Compose
+- [golang-migrate](https://github.com/golang-migrate/migrate) CLI(マイグレーション実行時)
+- [sqlc](https://sqlc.dev/) CLI(クエリ変更時のコード再生成)
+
+### 起動手順
+
+```bash
+cp .env.example .env
+# .env の JWT_SECRET は本番相当の値に変更する
+
+docker compose up -d
+make migrate-up
+```
+
+`docker compose up` で `app`(APIサーバー、`air`によるホットリロード)と `db`(PostgreSQL)が起動し、`http://localhost:8080/api` でAPIにアクセスできる。
+
+### マイグレーション
+
+```bash
+make migrate-up    # 適用
+make migrate-down  # 直近1件をロールバック
+```
+
+## 認証
+
+`POST /api/users` または `POST /api/users/login` で発行された `token` を、以降のリクエストで以下の形式のヘッダーに付与する。
+
+```
+Authorization: Token <jwt>
+```
+
+トークンの有効期限は発行から24時間。
 
 ## 要件定義(ユーザーストーリー、RealWorld仕様ベース)
 
@@ -148,7 +185,7 @@
 }
 ```
 
-`limit`/`offset`はクエリパラメータで受け取り、`limit`デフォルトは20。`articlesCount`はフィルタ後の**総件数**(ページ内の件数ではない)を返す点に注意。
+`limit`/`offset`はクエリパラメータで受け取り、`limit`のデフォルトは20・上限は100(範囲外の値は自動的にクランプされる)。`articlesCount`はフィルタ後の**総件数**(ページ内の件数ではない)を返す点に注意。
 
 **コメント**
 
@@ -169,3 +206,16 @@
 ```json
 { "errors": { "body": ["can't be empty"] } }
 ```
+
+## テスト
+
+[Hurl](https://hurl.dev/) による統合テストを `specs/api/hurl/` に用意している(出典・ライセンスは同ディレクトリの `NOTICE.md` を参照)。
+
+```bash
+docker compose up -d
+HOST=http://localhost:8080 bash specs/api/hurl/run-hurl-tests.sh
+```
+
+## ライセンス
+
+[MIT License](./LICENSE)。`specs/api/hurl/` 配下のテストは [realworld-apps/realworld](https://github.com/realworld-apps/realworld) から借用しており、そのライセンス表記は `specs/api/hurl/NOTICE.md` を参照。
