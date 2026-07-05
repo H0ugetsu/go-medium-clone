@@ -54,7 +54,7 @@ func run() error {
 	authService := service.NewAuthService(cfg.JWT.Secret)
 	userHandler := handler.NewUserHandler(userService, authService)
 
-	articleService := service.NewArticleService(queries)
+	articleService := service.NewArticleService(queries, dbpool)
 	articleHandler := handler.NewArticleHandler(articleService)
 
 	router := server.NewRouter(userHandler, articleHandler, authService, cfg)

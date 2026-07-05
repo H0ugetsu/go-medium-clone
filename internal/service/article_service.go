@@ -10,6 +10,7 @@ import (
 
 	"github.com/h0ugetsu/realworld-api/internal/repository"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -34,12 +35,14 @@ type ArticleService interface {
 }
 
 type articleService struct {
-	repo repository.Querier
+	repo *repository.Queries
+	db   *pgxpool.Pool
 }
 
-func NewArticleService(repo repository.Querier) ArticleService {
+func NewArticleService(repo *repository.Queries, db *pgxpool.Pool) ArticleService {
 	return &articleService{
 		repo: repo,
+		db:   db,
 	}
 }
 
@@ -66,22 +69,34 @@ func (s *articleService) CreateArticle(ctx context.Context, authorID int64, para
 	params.Slug = generateSlug(params.Title)
 	params.AuthorID = authorID
 
-	article, err := s.repo.CreateArticle(ctx, params)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	article, err := qtx.CreateArticle(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tagName := range tagList {
-		tagID, err := s.repo.UpsertTag(ctx, tagName)
+		tagID, err := qtx.UpsertTag(ctx, tagName)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.repo.AddArticleTag(ctx, repository.AddArticleTagParams{
+		if err := qtx.AddArticleTag(ctx, repository.AddArticleTagParams{
 			ArticleID: article.ID,
 			TagID:     tagID,
 		}); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 
 	return s.GetArticle(ctx, article.Slug, &authorID)
@@ -141,27 +156,39 @@ func (s *articleService) UpdateArticle(ctx context.Context, userID int64, slug s
 
 	params.Slug = slug
 
-	article, err := s.repo.UpdateArticle(ctx, params)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	article, err := qtx.UpdateArticle(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	if tagList != nil {
-		if err := s.repo.ClearArticleTags(ctx, ref.ID); err != nil {
+		if err := qtx.ClearArticleTags(ctx, ref.ID); err != nil {
 			return nil, err
 		}
 		for _, tagName := range *tagList {
-			tagID, err := s.repo.UpsertTag(ctx, tagName)
+			tagID, err := qtx.UpsertTag(ctx, tagName)
 			if err != nil {
 				return nil, err
 			}
-			if err := s.repo.AddArticleTag(ctx, repository.AddArticleTagParams{
+			if err := qtx.AddArticleTag(ctx, repository.AddArticleTagParams{
 				ArticleID: ref.ID,
 				TagID:     tagID,
 			}); err != nil {
 				return nil, err
 			}
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 
 	return s.GetArticle(ctx, article.Slug, &userID)
