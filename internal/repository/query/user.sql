@@ -66,8 +66,8 @@ SET
     username   = COALESCE(sqlc.narg('username'), username),
     email      = COALESCE(sqlc.narg('email'), email),
     password   = COALESCE(sqlc.narg('password'), password),
-    bio        = COALESCE(sqlc.narg('bio'), bio),
-    image      = COALESCE(sqlc.narg('image'), image),
+    bio        = CASE WHEN sqlc.arg('bio_set')::bool THEN sqlc.narg('bio') ELSE bio END,
+    image      = CASE WHEN sqlc.arg('image_set')::bool THEN sqlc.narg('image') ELSE image END,
     updated_at = now()
 WHERE
     id = sqlc.arg('id')

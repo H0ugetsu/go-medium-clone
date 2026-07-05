@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/h0ugetsu/realworld-api/internal/httputil"
 	"github.com/h0ugetsu/realworld-api/internal/httputil/httperror"
 	"github.com/h0ugetsu/realworld-api/internal/middleware"
 	"github.com/h0ugetsu/realworld-api/internal/repository"
@@ -228,10 +229,10 @@ func (h *ArticleHandler) List(c *echo.Context) error {
 
 type updateArticleReq struct {
 	Article struct {
-		Title       *string   `json:"title"`
-		Description *string   `json:"description"`
-		Body        *string   `json:"body"`
-		TagList     *[]string `json:"tagList"`
+		Title       *string                  `json:"title"`
+		Description *string                  `json:"description"`
+		Body        *string                  `json:"body"`
+		TagList     httputil.Field[[]string] `json:"tagList"`
 	} `json:"article"`
 }
 
@@ -253,11 +254,22 @@ func (h *ArticleHandler) Update(c *echo.Context) error {
 		return err
 	}
 
+	var tagList *[]string
+	if f := req.Article.TagList; f.Present {
+		if f.Null {
+			return httperror.New(http.StatusUnprocessableEntity, map[string]any{
+				"errors": map[string][]string{"tagList": {"can't be null"}},
+			})
+		}
+		v := f.Value
+		tagList = &v
+	}
+
 	article, err := h.articleService.UpdateArticle(c.Request().Context(), userID, slug, repository.UpdateArticleParams{
 		Title:       req.Article.Title,
 		Description: req.Article.Description,
 		Body:        req.Article.Body,
-	}, req.Article.TagList)
+	}, tagList)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrArticleNotFound):

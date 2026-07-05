@@ -95,7 +95,9 @@ func (s *userService) UpdateUser(ctx context.Context, userID int64, params repos
 		Email:    params.Email,
 		Password: hashedPassword,
 		Bio:      params.Bio,
+		BioSet:   params.BioSet,
 		Image:    params.Image,
+		ImageSet: params.ImageSet,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

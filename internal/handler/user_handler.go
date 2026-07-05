@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/h0ugetsu/realworld-api/internal/httputil"
 	"github.com/h0ugetsu/realworld-api/internal/httputil/httperror"
 	"github.com/h0ugetsu/realworld-api/internal/middleware"
 	"github.com/h0ugetsu/realworld-api/internal/repository"
@@ -181,11 +182,11 @@ func (h *UserHandler) CurrentUser(c *echo.Context) error {
 
 type updateUserReq struct {
 	User struct {
-		Username *string `json:"username"`
-		Email    *string `json:"email" validate:"omitempty,email"`
-		Password *string `json:"password" validate:"omitempty,min=8,max=66"`
-		Bio      *string `json:"bio"`
-		Image    *string `json:"image"`
+		Username httputil.Field[string] `json:"username"`
+		Email    httputil.Field[string] `json:"email"`
+		Password httputil.Field[string] `json:"password"`
+		Bio      httputil.Field[string] `json:"bio"`
+		Image    httputil.Field[string] `json:"image"`
 	} `json:"user"`
 }
 
@@ -211,17 +212,67 @@ func (h *UserHandler) Update(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-	if err := c.Validate(&req); err != nil {
-		return err
+
+	errs := map[string][]string{}
+	params := repository.UpdateUserParams{}
+
+	if f := req.User.Username; f.Present {
+		switch {
+		case f.Null || f.Value == "":
+			errs["username"] = append(errs["username"], "can't be blank")
+		default:
+			v := f.Value
+			params.Username = &v
+		}
 	}
 
-	user, err := h.userService.UpdateUser(c.Request().Context(), userID, repository.UpdateUserParams{
-		Username: req.User.Username,
-		Email:    req.User.Email,
-		Password: req.User.Password,
-		Bio:      req.User.Bio,
-		Image:    req.User.Image,
-	})
+	if f := req.User.Email; f.Present {
+		switch {
+		case f.Null || f.Value == "":
+			errs["email"] = append(errs["email"], "can't be blank")
+		case c.Validate(&struct {
+			Email string `validate:"email"`
+		}{f.Value}) != nil:
+			errs["email"] = append(errs["email"], "is invalid")
+		default:
+			v := f.Value
+			params.Email = &v
+		}
+	}
+
+	if f := req.User.Password; f.Present {
+		switch {
+		case f.Null || f.Value == "":
+			errs["password"] = append(errs["password"], "can't be blank")
+		case len(f.Value) < 8 || len(f.Value) > 66:
+			errs["password"] = append(errs["password"], "is invalid")
+		default:
+			v := f.Value
+			params.Password = &v
+		}
+	}
+
+	if f := req.User.Bio; f.Present {
+		params.BioSet = true
+		if !f.Null && f.Value != "" {
+			v := f.Value
+			params.Bio = &v
+		}
+	}
+
+	if f := req.User.Image; f.Present {
+		params.ImageSet = true
+		if !f.Null && f.Value != "" {
+			v := f.Value
+			params.Image = &v
+		}
+	}
+
+	if len(errs) > 0 {
+		return httperror.New(http.StatusUnprocessableEntity, map[string]any{"errors": errs})
+	}
+
+	user, err := h.userService.UpdateUser(c.Request().Context(), userID, params)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrEmailAlreadyExists):

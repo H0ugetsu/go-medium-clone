@@ -208,11 +208,11 @@ SET
     username   = COALESCE($1, username),
     email      = COALESCE($2, email),
     password   = COALESCE($3, password),
-    bio        = COALESCE($4, bio),
-    image      = COALESCE($5, image),
+    bio        = CASE WHEN $4::bool THEN $5 ELSE bio END,
+    image      = CASE WHEN $6::bool THEN $7 ELSE image END,
     updated_at = now()
 WHERE
-    id = $6
+    id = $8
 RETURNING id, username, email, bio, image, created_at, updated_at
 `
 
@@ -220,7 +220,9 @@ type UpdateUserParams struct {
 	Username *string `json:"username"`
 	Email    *string `json:"email"`
 	Password *string `json:"password"`
+	BioSet   bool    `json:"bio_set"`
 	Bio      *string `json:"bio"`
+	ImageSet bool    `json:"image_set"`
 	Image    *string `json:"image"`
 	ID       int64   `json:"id"`
 }
@@ -240,7 +242,9 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (*Update
 		arg.Username,
 		arg.Email,
 		arg.Password,
+		arg.BioSet,
 		arg.Bio,
+		arg.ImageSet,
 		arg.Image,
 		arg.ID,
 	)
